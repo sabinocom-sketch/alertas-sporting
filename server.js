@@ -600,6 +600,11 @@ async function loadOfficialSportingPayload() {
   return {
     source: fixtures === fallbackFixtures ? "football-data.org" : FOOTBALL_DATA_KEY ? "sporting.pt + football-data.org" : "sporting.pt",
     updatedAt: new Date().toISOString(),
+    emailEnabled: emailEnabled(),
+    officialCalendarOk: fixtures !== fallbackFixtures,
+    notes: fixtures === fallbackFixtures
+      ? ["Calendario oficial indisponivel neste momento. A usar football-data.org como fonte de seguranca."]
+      : [],
     fixtures,
     live
   };
@@ -678,6 +683,9 @@ async function loadPayload() {
     source: "api-football",
     season,
     updatedAt: new Date().toISOString(),
+    emailEnabled: emailEnabled(),
+    officialCalendarOk: false,
+    notes: ["A usar apenas football-data.org."],
     fixtures: upcomingFixtures,
     live
   };
