@@ -299,28 +299,41 @@ function htmlToLines(html) {
 function monthNumber(month) {
   const months = {
     january: "01",
+    janeiro: "01",
     february: "02",
+    fevereiro: "02",
     march: "03",
+    marco: "03",
+    março: "03",
     april: "04",
+    abril: "04",
     may: "05",
+    maio: "05",
     june: "06",
+    junho: "06",
     july: "07",
+    julho: "07",
     august: "08",
+    agosto: "08",
     september: "09",
+    setembro: "09",
     october: "10",
+    outubro: "10",
     november: "11",
-    december: "12"
+    novembro: "11",
+    december: "12",
+    dezembro: "12"
   };
 
-  return months[month.toLowerCase()];
+  return months[month.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")];
 }
 
 function isCalendarMonth(line) {
-  return /^(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}$/i.test(line);
+  return /^(January|February|March|April|May|June|July|August|September|October|November|December|Janeiro|Fevereiro|Março|Marco|Abril|Maio|Junho|Julho|Agosto|Setembro|Outubro|Novembro|Dezembro)\s+\d{4}$/i.test(line);
 }
 
 function isCalendarDay(line) {
-  return /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+\d{1,2}$/i.test(line);
+  return /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Seg|Ter|Qua|Qui|Sex|Sab|Sáb|Dom)\s+\d{1,2}$/i.test(line);
 }
 
 function isTime(line) {
@@ -328,13 +341,13 @@ function isTime(line) {
 }
 
 function isCompetition(line) {
-  return /^(League|Liga|Portuguese Cup|Portugal Cup|Taça de Portugal|Taca de Portugal|Allianz Cup|Champions League|Europa League)$/i.test(line);
+  return /^(League|Liga|Campeonato|Portuguese Cup|Portugal Cup|Taça de Portugal|Taca de Portugal|Allianz Cup|Taça da Liga|Taca da Liga|Champions League|Liga dos Campeões|Liga dos Campeoes|Europa League)$/i.test(line);
 }
 
 function isNonTeamLine(line) {
   return isTime(line)
     || isCompetition(line)
-    || /^(Home|Out|Away|Tentative Date|Share|Facebook|Twitter|Share by email|Results|Table)$/i.test(line)
+    || /^(Home|Casa|Out|Away|Fora|Tentative Date|Data provisória|Data provisoria|Share|Partilhar|Facebook|Twitter|Share by email|Partilhar por email|Results|Resultados|Table|Classificação|Classificacao)$/i.test(line)
     || /^Image$/i.test(line);
 }
 
@@ -399,7 +412,7 @@ function parseSportingCalendar(html) {
       cursor += 1;
     }
 
-    const direction = block.find((line) => /^(Home|Out|Away)$/i.test(line)) || "";
+    const direction = block.find((line) => /^(Home|Casa|Out|Away|Fora)$/i.test(line)) || "";
     const competition = block.find(isCompetition) || "Sporting CP";
     const time = block.find(isTime) || "";
     const timeKnown = Boolean(time);
@@ -408,10 +421,10 @@ function parseSportingCalendar(html) {
     let home = "";
     let away = "";
 
-    if (/^(Out|Away)$/i.test(direction) && teamLines[0]) {
+    if (/^(Out|Away|Fora)$/i.test(direction) && teamLines[0]) {
       home = teamLines[0];
       away = sportingName;
-    } else if (/^Home$/i.test(direction) && teamLines[0]) {
+    } else if (/^(Home|Casa)$/i.test(direction) && teamLines[0]) {
       home = sportingName;
       away = teamLines[0];
     } else {
