@@ -831,7 +831,8 @@ async function refresh() {
 }
 
 function serveStatic(req, res) {
-  const requestedPath = req.url === "/" ? "/index.html" : decodeURIComponent(req.url);
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const requestedPath = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
   const filePath = path.normalize(path.join(PUBLIC_DIR, requestedPath));
 
   if (!filePath.startsWith(PUBLIC_DIR)) {
@@ -856,7 +857,12 @@ function serveStatic(req, res) {
       ".svg": "image/svg+xml"
     };
 
-    res.writeHead(200, { "content-type": types[ext] || "application/octet-stream" });
+    res.writeHead(200, {
+      "content-type": types[ext] || "application/octet-stream",
+      "cache-control": ext === ".html" || ext === ".js" || ext === ".css"
+        ? "no-store, max-age=0"
+        : "public, max-age=3600"
+    });
     res.end(content);
   });
 }
