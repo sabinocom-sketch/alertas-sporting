@@ -9,6 +9,8 @@ services:
     envVars:
       - key: APP_TIMEZONE
         value: Europe/Lisbon
+      - key: SPORTING_CALENDAR_URL
+        value: https://www.sporting.pt/en/football/main-team/calendar
       - key: FOOTBALL_DATA_KEY
         sync: false
       - key: EMAIL_TO

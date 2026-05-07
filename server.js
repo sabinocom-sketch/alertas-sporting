@@ -12,6 +12,7 @@ const SMTP_PORT = Number(process.env.SMTP_PORT || 465);
 const SMTP_USER = process.env.SMTP_USER || "";
 const SMTP_PASS = process.env.SMTP_PASS || "";
 const SMTP_FROM = process.env.SMTP_FROM || SMTP_USER;
+const SPORTING_CALENDAR_URL = process.env.SPORTING_CALENDAR_URL || "https://www.sporting.pt/en/football/main-team/calendar";
 const TEAM_ID = process.env.SPORTING_TEAM_ID || "228";
 const FOOTBALL_DATA_TEAM_ID = process.env.FOOTBALL_DATA_TEAM_ID || "498";
 const API_FOOTBALL_BASE = "https://v3.football.api-sports.io";
@@ -260,6 +261,199 @@ async function footballData(pathname, params = {}) {
   return response.json();
 }
 
+async function loadSportingCalendarHtml() {
+  const response = await fetch(SPORTING_CALENDAR_URL, {
+    headers: {
+      "accept": "text/html,application/xhtml+xml",
+      "user-agent": "AlertasSporting/1.0 (+https://render.com)"
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Sporting calendario respondeu ${response.status}`);
+  }
+
+  return response.text();
+}
+
+function decodeHtml(value) {
+  return value
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+function htmlToLines(html) {
+  return decodeHtml(html)
+    .replace(/<script[\s\S]*?<\/script>/gi, "\n")
+    .replace(/<style[\s\S]*?<\/style>/gi, "\n")
+    .replace(/<[^>]+>/g, "\n")
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+}
+
+function monthNumber(month) {
+  const months = {
+    january: "01",
+    february: "02",
+    march: "03",
+    april: "04",
+    may: "05",
+    june: "06",
+    july: "07",
+    august: "08",
+    september: "09",
+    october: "10",
+    november: "11",
+    december: "12"
+  };
+
+  return months[month.toLowerCase()];
+}
+
+function isCalendarMonth(line) {
+  return /^(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}$/i.test(line);
+}
+
+function isCalendarDay(line) {
+  return /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+\d{1,2}$/i.test(line);
+}
+
+function isTime(line) {
+  return /^\d{1,2}:\d{2}$/.test(line);
+}
+
+function isCompetition(line) {
+  return /^(League|Liga|Portuguese Cup|Portugal Cup|Taça de Portugal|Taca de Portugal|Allianz Cup|Champions League|Europa League)$/i.test(line);
+}
+
+function isNonTeamLine(line) {
+  return isTime(line)
+    || isCompetition(line)
+    || /^(Home|Out|Away|Tentative Date|Share|Facebook|Twitter|Share by email|Results|Table)$/i.test(line)
+    || /^Image$/i.test(line);
+}
+
+function makeLisbonDate(year, month, day, time) {
+  const timePart = time || "12:00";
+  const dayPart = String(day).padStart(2, "0");
+  const [hour, minute] = timePart.split(":").map(Number);
+  const utcGuess = new Date(Date.UTC(Number(year), Number(month) - 1, Number(dayPart), hour, minute));
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).formatToParts(utcGuess);
+  const value = (type) => parts.find((part) => part.type === type)?.value || "00";
+  const localAsUtc = Date.UTC(
+    Number(value("year")),
+    Number(value("month")) - 1,
+    Number(value("day")),
+    Number(value("hour")),
+    Number(value("minute"))
+  );
+  const offsetMinutes = Math.round((localAsUtc - utcGuess.getTime()) / 60000);
+  const sign = offsetMinutes >= 0 ? "+" : "-";
+  const absoluteOffset = Math.abs(offsetMinutes);
+  const offsetHour = String(Math.floor(absoluteOffset / 60)).padStart(2, "0");
+  const offsetMinute = String(absoluteOffset % 60).padStart(2, "0");
+
+  return `${year}-${month}-${dayPart}T${timePart}:00${sign}${offsetHour}:${offsetMinute}`;
+}
+
+function parseSportingCalendar(html) {
+  const lines = htmlToLines(html);
+  const fixtures = [];
+  let month = "";
+  let year = "";
+
+  for (let i = 0; i < lines.length; i += 1) {
+    if (isCalendarMonth(lines[i])) {
+      const [monthName, yearValue] = lines[i].split(" ");
+      month = monthNumber(monthName);
+      year = yearValue;
+      continue;
+    }
+
+    if (!month || !year || !isCalendarDay(lines[i])) {
+      continue;
+    }
+
+    const [, dayValue] = lines[i].split(" ");
+    const block = [];
+    let cursor = i + 1;
+
+    while (cursor < lines.length && !isCalendarDay(lines[cursor]) && !isCalendarMonth(lines[cursor])) {
+      if (/^(Fan Zone|You are here|Results|Table)$/i.test(lines[cursor])) {
+        break;
+      }
+      block.push(lines[cursor]);
+      cursor += 1;
+    }
+
+    const direction = block.find((line) => /^(Home|Out|Away)$/i.test(line)) || "";
+    const competition = block.find(isCompetition) || "Sporting CP";
+    const time = block.find(isTime) || "";
+    const timeKnown = Boolean(time);
+    const teamLines = block.filter((line) => !isNonTeamLine(line));
+    const sportingName = "Sporting Clube de Portugal";
+    let home = "";
+    let away = "";
+
+    if (/^(Out|Away)$/i.test(direction) && teamLines[0]) {
+      home = teamLines[0];
+      away = sportingName;
+    } else if (/^Home$/i.test(direction) && teamLines[0]) {
+      home = sportingName;
+      away = teamLines[0];
+    } else {
+      const sportingIndex = teamLines.findIndex((line) => /SPORTING CP|Sporting Clube de Portugal/i.test(line));
+      if (sportingIndex >= 0 && teamLines[sportingIndex + 1]) {
+        home = sportingName;
+        away = teamLines[sportingIndex + 1];
+      } else if (teamLines.length >= 2) {
+        home = teamLines[0];
+        away = teamLines[1];
+      }
+    }
+
+    if (home && away) {
+      fixtures.push({
+        id: `scp-${year}-${month}-${String(dayValue).padStart(2, "0")}-${home}-${away}`.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        status: "SCHEDULED",
+        statusLong: timeKnown ? "Scheduled" : "Tentative Date",
+        elapsed: null,
+        date: makeLisbonDate(year, month, dayValue, time),
+        league: competition,
+        home,
+        away,
+        venue: "",
+        timeKnown,
+        goals: { home: null, away: null }
+      });
+    }
+  }
+
+  const now = Date.now();
+  return fixtures
+    .filter((fixture) => new Date(fixture.date).getTime() >= now - 24 * 60 * 60 * 1000)
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
+    .slice(0, 12);
+}
+
+async function loadSportingCalendarFixtures() {
+  const html = await loadSportingCalendarHtml();
+  return parseSportingCalendar(html);
+}
+
 function normalizeFixture(item) {
   return {
     id: String(item.fixture.id),
@@ -353,6 +547,42 @@ async function loadFootballDataPayload() {
   };
 }
 
+async function loadLiveFromFootballData() {
+  if (!FOOTBALL_DATA_KEY) {
+    return [];
+  }
+
+  const now = new Date();
+  const from = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const to = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const data = await footballData("/competitions/PPL/matches", { dateFrom: from, dateTo: to });
+  const liveStatuses = new Set(["LIVE", "IN_PLAY", "PAUSED", "FINISHED"]);
+
+  return (data.matches || [])
+    .filter(isSportingMatch)
+    .map(normalizeFootballDataMatch)
+    .filter((fixture) => liveStatuses.has(fixture.status))
+    .map((fixture) => ({ fixture, events: [] }));
+}
+
+async function loadOfficialSportingPayload() {
+  const fixtures = await loadSportingCalendarFixtures();
+  let live = [];
+
+  try {
+    live = await loadLiveFromFootballData();
+  } catch (error) {
+    live = [];
+  }
+
+  return {
+    source: FOOTBALL_DATA_KEY ? "sporting.pt + football-data.org" : "sporting.pt",
+    updatedAt: new Date().toISOString(),
+    fixtures,
+    live
+  };
+}
+
 function detectFinalWhistles(currentLiveFixtures) {
   const finals = [];
 
@@ -376,6 +606,18 @@ function detectFinalWhistles(currentLiveFixtures) {
 }
 
 async function loadPayload() {
+  try {
+    return await loadOfficialSportingPayload();
+  } catch (error) {
+    if (!FOOTBALL_DATA_KEY && !API_FOOTBALL_KEY) {
+      return {
+        ...demoPayload,
+        updatedAt: new Date().toISOString(),
+        message: `Nao consegui ler o calendario oficial: ${error.message}`
+      };
+    }
+  }
+
   if (FOOTBALL_DATA_KEY) {
     return loadFootballDataPayload();
   }

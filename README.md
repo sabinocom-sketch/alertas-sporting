@@ -20,7 +20,7 @@ http://localhost:4173
 
 ## Dados reais
 
-A app funciona sem configuracao em modo demo. Para dados reais no plano gratuito, recomenda-se football-data.org, porque inclui a Primeira Liga no free tier.
+A app usa o calendario oficial do Sporting como fonte principal dos proximos jogos. Para estado em direto, resultados e detecao de golos na Primeira Liga, recomenda-se football-data.org no plano gratuito.
 
 ```powershell
 $env:FOOTBALL_DATA_KEY="a_tua_chave"
@@ -70,6 +70,7 @@ A opcao mais simples e Render.
 
 ```text
 APP_TIMEZONE=Europe/Lisbon
+SPORTING_CALENDAR_URL=https://www.sporting.pt/en/football/main-team/calendar
 FOOTBALL_DATA_KEY=a_tua_chave_do_football_data
 EMAIL_TO=o_teu_email@gmail.com
 SMTP_USER=o_teu_email@gmail.com
