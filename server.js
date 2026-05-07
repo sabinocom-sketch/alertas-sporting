@@ -13,6 +13,7 @@ const SMTP_USER = process.env.SMTP_USER || "";
 const SMTP_PASS = process.env.SMTP_PASS || "";
 const SMTP_FROM = process.env.SMTP_FROM || SMTP_USER;
 const SPORTING_CALENDAR_URL = process.env.SPORTING_CALENDAR_URL || "https://www.sporting.pt/en/football/main-team/calendar";
+const SPORTING_NEWS_URL = process.env.SPORTING_NEWS_URL || "https://www.sporting.pt/pt/noticias";
 const TEAM_ID = process.env.SPORTING_TEAM_ID || "228";
 const FOOTBALL_DATA_TEAM_ID = process.env.FOOTBALL_DATA_TEAM_ID || "498";
 const API_FOOTBALL_BASE = "https://v3.football.api-sports.io";
@@ -467,6 +468,42 @@ async function loadSportingCalendarFixtures() {
   return parseSportingCalendar(html);
 }
 
+async function loadSportingNews() {
+  const response = await fetch(SPORTING_NEWS_URL, {
+    headers: {
+      "accept": "text/html,application/xhtml+xml",
+      "user-agent": "AlertasSporting/1.0 (+https://render.com)"
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Sporting noticias respondeu ${response.status}`);
+  }
+
+  const html = await response.text();
+  const titleRegex = /<a[^>]+href="([^"]+)"[^>]*>\s*([^<]{8,160})\s*<\/a>/gi;
+  const news = [];
+  const seen = new Set();
+  let match;
+
+  while ((match = titleRegex.exec(html)) && news.length < 8) {
+    const href = decodeHtml(match[1]);
+    const title = decodeHtml(match[2]).replace(/\s+/g, " ").trim();
+
+    if (!href.includes("/noticias/") || seen.has(title) || /^(ver todas|ler mais|comprar bilhetes)$/i.test(title)) {
+      continue;
+    }
+
+    seen.add(title);
+    news.push({
+      title,
+      url: href.startsWith("http") ? href : `https://www.sporting.pt${href}`
+    });
+  }
+
+  return news;
+}
+
 function normalizeFixture(item) {
   return {
     id: String(item.fixture.id),
@@ -578,19 +615,45 @@ async function loadLiveFromFootballData() {
     .map((fixture) => ({ fixture, events: [] }));
 }
 
+async function loadLastResultFromFootballData() {
+  if (!FOOTBALL_DATA_KEY) {
+    return null;
+  }
+
+  const now = new Date();
+  const from = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const to = now.toISOString().slice(0, 10);
+  const data = await footballData("/competitions/PPL/matches", { dateFrom: from, dateTo: to });
+
+  return (data.matches || [])
+    .filter(isSportingMatch)
+    .map(normalizeFootballDataMatch)
+    .filter((fixture) => fixture.status === "FINISHED")
+    .sort((a, b) => new Date(b.date) - new Date(a.date))[0] || null;
+}
+
 async function loadOfficialSportingPayload() {
   let fixtures = await loadSportingCalendarFixtures();
   let live = [];
   let fallbackFixtures = [];
+  let lastResult = null;
+  let news = [];
 
   try {
     if (FOOTBALL_DATA_KEY) {
       const footballDataPayload = await loadFootballDataPayload();
       fallbackFixtures = footballDataPayload.fixtures;
       live = footballDataPayload.live;
+      lastResult = await loadLastResultFromFootballData();
     }
   } catch (error) {
     live = [];
+  }
+
+  try {
+    news = await loadSportingNews();
+  } catch (error) {
+    news = [];
   }
 
   if (fixtures.length === 0 && fallbackFixtures.length > 0) {
@@ -606,7 +669,9 @@ async function loadOfficialSportingPayload() {
       ? ["Calendario oficial indisponivel neste momento. A usar football-data.org como fonte de seguranca."]
       : [],
     fixtures,
-    live
+    live,
+    lastResult,
+    news
   };
 }
 
@@ -687,7 +752,9 @@ async function loadPayload() {
     officialCalendarOk: false,
     notes: ["A usar apenas football-data.org."],
     fixtures: upcomingFixtures,
-    live
+    live,
+    lastResult: null,
+    news: []
   };
 }
 

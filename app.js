@@ -1,7 +1,7 @@
 const fixtureList = document.querySelector("#fixtureList");
 const liveList = document.querySelector("#liveList");
+const newsList = document.querySelector("#newsList");
 const eventLog = document.querySelector("#eventLog");
-const notifyButton = document.querySelector("#notifyButton");
 const clearButton = document.querySelector("#clearButton");
 const statusText = document.querySelector("#statusText");
 const updatedAt = document.querySelector("#updatedAt");
@@ -151,10 +151,62 @@ function renderLive(items) {
   }
 }
 
+function renderLastResult(match) {
+  if (!match) {
+    liveList.innerHTML = `
+      <div class="empty-state strong-empty">
+        <strong>Sem resultado recente carregado.</strong>
+        <span>Quando a fonte tiver o ultimo jogo finalizado, ele aparece aqui.</span>
+      </div>
+    `;
+    return;
+  }
+
+  liveList.innerHTML = `
+    <article class="live-card result-card">
+      <div class="live-top">
+        <span>Final</span>
+        <span>${formatDate(match.date)}</span>
+      </div>
+      <div class="score-line">${match.home} ${match.goals.home ?? 0} - ${match.goals.away ?? 0} ${match.away}</div>
+      <p class="meta">${match.league}</p>
+    </article>
+  `;
+}
+
+function renderNews(items) {
+  newsList.innerHTML = "";
+
+  if (!items || items.length === 0) {
+    newsList.innerHTML = `
+      <div class="empty-state strong-empty">
+        <strong>Noticias indisponiveis.</strong>
+        <span>A fonte oficial pode estar temporariamente indisponivel.</span>
+      </div>
+    `;
+    return;
+  }
+
+  for (const item of items.slice(0, 6)) {
+    const link = document.createElement("a");
+    link.className = "news-item";
+    link.href = item.url;
+    link.target = "_blank";
+    link.rel = "noreferrer";
+    link.textContent = item.title;
+    newsList.append(link);
+  }
+}
+
 function updateSnapshot(payload) {
   fixtures = payload.fixtures || [];
   renderFixtures(fixtures);
-  renderLive(payload.live || []);
+  if (payload.live && payload.live.length > 0) {
+    renderLive(payload.live);
+  } else {
+    renderLastResult(payload.lastResult);
+  }
+  renderNews(payload.news || []);
 
   const updated = new Date(payload.updatedAt || Date.now());
   updatedAt.textContent = `Atualizado ${formatTime(updated)}`;
@@ -235,16 +287,10 @@ function connectEvents() {
   };
 }
 
-notifyButton.addEventListener("click", requestNotifications);
 clearButton.addEventListener("click", () => {
   localStorage.removeItem("eventLog");
   renderEvents([]);
 });
-
-if ("Notification" in window && Notification.permission === "granted") {
-  notifyButton.textContent = "Notificacoes ativas";
-  notifyButton.disabled = true;
-}
 
 renderEvents();
 connectEvents();
