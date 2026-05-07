@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Alertas Sporting</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="scoreboard" aria-label="Painel principal">
+        <div class="brand-mark" aria-hidden="true">
+          <span>SCP</span>
+        </div>
+        <div>
+          <p class="eyebrow">Sporting CP</p>
+          <h1>Alertas de jogo</h1>
+          <p id="statusText" class="status-text">A carregar calendario...</p>
+        </div>
+        <button id="notifyButton" class="primary-button" type="button">
+          Ativar notificacoes
+        </button>
+      </section>
+
+      <section class="live-panel" aria-label="Jogos em direto">
+        <div class="section-heading">
+          <h2>Agora</h2>
+          <span id="updatedAt">--</span>
+        </div>
+        <div id="liveList" class="live-list"></div>
+      </section>
+
+      <section class="fixtures-panel" aria-label="Proximos jogos">
+        <div class="section-heading">
+          <h2>Proximos jogos</h2>
+          <span id="sourceBadge">demo</span>
+        </div>
+        <div id="fixtureList" class="fixture-list"></div>
+      </section>
+
+      <section class="events-panel" aria-label="Eventos recebidos">
+        <div class="section-heading">
+          <h2>Alertas</h2>
+          <button id="clearButton" class="ghost-button" type="button">Limpar</button>
+        </div>
+        <ol id="eventLog" class="event-log"></ol>
+      </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "name": "sporting-match-alerts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "App local para notificacoes de jogos, golos e resultados do Sporting CP.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
