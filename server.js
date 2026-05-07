@@ -579,17 +579,26 @@ async function loadLiveFromFootballData() {
 }
 
 async function loadOfficialSportingPayload() {
-  const fixtures = await loadSportingCalendarFixtures();
+  let fixtures = await loadSportingCalendarFixtures();
   let live = [];
+  let fallbackFixtures = [];
 
   try {
-    live = await loadLiveFromFootballData();
+    if (FOOTBALL_DATA_KEY) {
+      const footballDataPayload = await loadFootballDataPayload();
+      fallbackFixtures = footballDataPayload.fixtures;
+      live = footballDataPayload.live;
+    }
   } catch (error) {
     live = [];
   }
 
+  if (fixtures.length === 0 && fallbackFixtures.length > 0) {
+    fixtures = fallbackFixtures;
+  }
+
   return {
-    source: FOOTBALL_DATA_KEY ? "sporting.pt + football-data.org" : "sporting.pt",
+    source: fixtures === fallbackFixtures ? "football-data.org" : FOOTBALL_DATA_KEY ? "sporting.pt + football-data.org" : "sporting.pt",
     updatedAt: new Date().toISOString(),
     fixtures,
     live
