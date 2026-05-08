@@ -1,11 +1,15 @@
 const fixtureList = document.querySelector("#fixtureList");
 const liveList = document.querySelector("#liveList");
+const newsList = document.querySelector("#newsList");
 const eventLog = document.querySelector("#eventLog");
-const notifyButton = document.querySelector("#notifyButton");
 const clearButton = document.querySelector("#clearButton");
 const statusText = document.querySelector("#statusText");
 const updatedAt = document.querySelector("#updatedAt");
 const sourceBadge = document.querySelector("#sourceBadge");
+const emailState = document.querySelector("#emailState");
+const calendarState = document.querySelector("#calendarState");
+const calendarDetail = document.querySelector("#calendarDetail");
+const emailDetail = document.querySelector("#emailDetail");
 
 const notifiedKickoffs = new Set(JSON.parse(localStorage.getItem("notifiedKickoffs") || "[]"));
 const savedEvents = JSON.parse(localStorage.getItem("eventLog") || "[]");
@@ -29,6 +33,23 @@ function formatTime(dateString) {
 
 function fixtureTimeLabel(fixture) {
   return fixture.timeKnown === false ? "A confirmar" : formatTime(fixture.date);
+}
+
+function sourceLabel(source) {
+  const labels = {
+    demo: "Demo",
+    "football-data.org": "Football-data",
+    "sporting.pt": "Sporting oficial",
+    "sporting.pt + football-data.org": "Sporting + live"
+  };
+
+  return labels[source] || source || "Demo";
+}
+
+function fixtureReliability(fixture) {
+  return fixture.timeKnown === false
+    ? "Hora ainda nao confirmada pela fonte."
+    : "Horario confirmado pela fonte.";
 }
 
 function notify(title, body) {
@@ -75,7 +96,12 @@ function renderFixtures(items) {
   fixtureList.innerHTML = "";
 
   if (items.length === 0) {
-    fixtureList.innerHTML = '<div class="empty-state">Nao ha proximos jogos carregados.</div>';
+    fixtureList.innerHTML = `
+      <div class="empty-state strong-empty">
+        <strong>Nao encontrei proximos jogos.</strong>
+        <span>A fonte principal pode estar sem calendario publicado ou temporariamente indisponivel.</span>
+      </div>
+    `;
     return;
   }
 
@@ -89,6 +115,7 @@ function renderFixtures(items) {
       <div>
         <div class="teams">${fixture.home} - ${fixture.away}</div>
         <p class="meta">${fixture.league}${fixture.venue ? ` · ${fixture.venue}` : ""}</p>
+        <p class="hint">${fixtureReliability(fixture)}</p>
       </div>
     `;
     fixtureList.append(card);
@@ -99,7 +126,12 @@ function renderLive(items) {
   liveList.innerHTML = "";
 
   if (items.length === 0) {
-    liveList.innerHTML = '<div class="empty-state">Neste momento nao ha jogo em direto.</div>';
+    liveList.innerHTML = `
+      <div class="empty-state strong-empty">
+        <strong>Sem jogo em direto.</strong>
+        <span>Quando houver marcador ao vivo, aparece aqui.</span>
+      </div>
+    `;
     return;
   }
 
@@ -119,21 +151,83 @@ function renderLive(items) {
   }
 }
 
+function renderLastResult(match) {
+  if (!match) {
+    liveList.innerHTML = `
+      <div class="empty-state strong-empty">
+        <strong>Sem resultado recente carregado.</strong>
+        <span>Quando a fonte tiver o ultimo jogo finalizado, ele aparece aqui.</span>
+      </div>
+    `;
+    return;
+  }
+
+  liveList.innerHTML = `
+    <article class="live-card result-card">
+      <div class="live-top">
+        <span>Final</span>
+        <span>${formatDate(match.date)}</span>
+      </div>
+      <div class="score-line">${match.home} ${match.goals.home ?? 0} - ${match.goals.away ?? 0} ${match.away}</div>
+      <p class="meta">${match.league}</p>
+    </article>
+  `;
+}
+
+function renderNews(items) {
+  newsList.innerHTML = "";
+
+  if (!items || items.length === 0) {
+    newsList.innerHTML = `
+      <div class="empty-state strong-empty">
+        <strong>Noticias indisponiveis.</strong>
+        <span>A fonte oficial pode estar temporariamente indisponivel.</span>
+      </div>
+    `;
+    return;
+  }
+
+  for (const item of items.slice(0, 6)) {
+    const link = document.createElement("a");
+    link.className = "news-item";
+    link.href = item.url;
+    link.target = "_blank";
+    link.rel = "noreferrer";
+    link.textContent = item.title;
+    newsList.append(link);
+  }
+}
+
 function updateSnapshot(payload) {
   fixtures = payload.fixtures || [];
   renderFixtures(fixtures);
-  renderLive(payload.live || []);
+  if (payload.live && payload.live.length > 0) {
+    renderLive(payload.live);
+  } else {
+    renderLastResult(payload.lastResult);
+  }
+  renderNews(payload.news || []);
 
   const updated = new Date(payload.updatedAt || Date.now());
   updatedAt.textContent = `Atualizado ${formatTime(updated)}`;
-  sourceBadge.textContent = payload.source || "demo";
+  sourceBadge.textContent = sourceLabel(payload.source);
+  emailState.textContent = payload.emailEnabled ? "email ativo" : "email inativo";
+  emailDetail.textContent = payload.emailEnabled
+    ? "Configurado para emails das 08:00, golos e resultado final."
+    : "SMTP ainda nao esta configurado no servidor.";
+  calendarState.textContent = payload.officialCalendarOk ? "Calendario oficial" : "Calendario alternativo";
+  calendarDetail.textContent = payload.officialCalendarOk
+    ? "A fonte principal e o calendario oficial do Sporting."
+    : (payload.notes?.[0] || "A usar fonte alternativa para manter a app util.");
 
   if (payload.error) {
     statusText.textContent = `Erro nos dados reais: ${payload.error}`;
   } else if (payload.message) {
     statusText.textContent = payload.message;
   } else {
-    statusText.textContent = "Ligado aos dados reais. A app avisa sobre jogos, golos e final.";
+    const fixtureCount = fixtures.length;
+    const gameText = fixtureCount === 1 ? "1 jogo carregado" : `${fixtureCount} jogos carregados`;
+    statusText.textContent = `Ligado aos dados reais. ${gameText}. Emails e alertas ficam tratados pela cloud.`;
   }
 }
 
@@ -193,16 +287,10 @@ function connectEvents() {
   };
 }
 
-notifyButton.addEventListener("click", requestNotifications);
 clearButton.addEventListener("click", () => {
   localStorage.removeItem("eventLog");
   renderEvents([]);
 });
-
-if ("Notification" in window && Notification.permission === "granted") {
-  notifyButton.textContent = "Notificacoes ativas";
-  notifyButton.disabled = true;
-}
 
 renderEvents();
 connectEvents();

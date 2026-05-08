@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Alertas Sporting</title>
+    <title>Alertas Sporting Cloud</title>
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
@@ -17,17 +17,39 @@
           <h1>Alertas de jogo</h1>
           <p id="statusText" class="status-text">A carregar calendario...</p>
         </div>
-        <button id="notifyButton" class="primary-button" type="button">
-          Ativar notificacoes
-        </button>
+        <div class="cloud-badge">
+          <strong>Cloud ativa</strong>
+          <span>emails automaticos</span>
+        </div>
       </section>
 
       <section class="live-panel" aria-label="Jogos em direto">
         <div class="section-heading">
-          <h2>Agora</h2>
+          <h2>Ultimo resultado</h2>
           <span id="updatedAt">--</span>
         </div>
         <div id="liveList" class="live-list"></div>
+      </section>
+
+      <section class="info-panel" aria-label="Estado dos alertas">
+        <div class="section-heading">
+          <h2>Estado</h2>
+          <span id="emailState">email --</span>
+        </div>
+        <div class="status-grid">
+          <div class="status-pill">
+            <strong id="calendarState">Calendario</strong>
+            <span id="calendarDetail">A verificar fonte dos jogos.</span>
+          </div>
+          <div class="status-pill">
+            <strong>Emails</strong>
+            <span id="emailDetail">A confirmar configuracao.</span>
+          </div>
+          <div class="status-pill">
+            <strong>Golos</strong>
+            <span>Disponiveis quando a fonte live tiver marcador atualizado.</span>
+          </div>
+        </div>
       </section>
 
       <section class="fixtures-panel" aria-label="Proximos jogos">
@@ -44,6 +66,14 @@
           <button id="clearButton" class="ghost-button" type="button">Limpar</button>
         </div>
         <ol id="eventLog" class="event-log"></ol>
+      </section>
+
+      <section class="news-panel" aria-label="Noticias do Sporting">
+        <div class="section-heading">
+          <h2>Noticias</h2>
+          <span>Sporting CP</span>
+        </div>
+        <div id="newsList" class="news-list"></div>
       </section>
     </main>
 
